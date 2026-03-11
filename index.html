@@ -278,6 +278,7 @@ const sketches=[
   {msg:"ОТПРАВЛЯЙТЕ — 📲\nвсегда есть тел",tr:"Не ждите дополнительного разрешения. Действуйте.",glitch:false,confetti:false},
   {msg:"Что здесь не так? 🤔\nКто скажет?",tr:"Надо писать подробно в комментариях. Укажите и обновите счета заново.",glitch:true,confetti:false},
   {msg:"Что с выручкой? 📊\nВытягивайте! 💪",tr:"Не расслабляйтесь, коллеги. Прокачайте все наши показатели на максимум.",glitch:false,confetti:false},
+  {msg:"Я вас здесь всех собрала,\nчтобы вы без меня решили",tr:"Вы взрослые люди. Мне не нужно присутствовать на каждом созвоне. Договоритесь сами.",glitch:false,confetti:false},
   {msg:"Очень достойно,\nспасибо) 🤩\nждем продолжение",tr:"Вы сделали что-то выдающееся. Я горжусь.",glitch:false,confetti:true},
   {msg:"Отлично ✨",tr:"Хорошая работа. Так держать. Молодцы.",glitch:false,confetti:true},
 ];
@@ -287,7 +288,7 @@ const skC=document.getElementById('sketchContainer');
 sketches.forEach((s,i)=>{
   const d=document.createElement('div');
   d.className='scene sketch-scene';d.id=`sk${i}`;
-  d.innerHTML=`<div class="sk-counter">${String(i+1).padStart(2,'0')} / 15</div>
+  d.innerHTML=`<div class="sk-counter">${String(i+1).padStart(2,'0')} / 16</div>
     <div class="sk-badge">Входящее сообщение</div>
     <div class="msg-in" id="in${i}"><div class="msg-lbl" style="display:flex;align-items:center;gap:8px;">
         <canvas id="afc${i}" width="36" height="44" style="image-rendering:pixelated;flex-shrink:0;"></canvas>
@@ -418,8 +419,8 @@ let score=0, hp=100;
 const scoreEl=document.getElementById('scoreVal');
 const hpFillEl=document.getElementById('hpFill');
 
-const sketchHpDelta=[-15,-17,-8,-18,-20,-10,-10,-12,-12,4,-4,-6,6,45,52];
-const sketchScore=  [80, 90, 85, 70, 100, 95, 90, 80, 85, 110, 100, 90, 130, 200, 280];
+const sketchHpDelta=[-15,-17,-8,-18,-20,-10,-10,-12,-12,4,-4,-6,6,-8,45,52];
+const sketchScore=  [80, 90, 85, 70, 100, 95, 90, 80, 85, 110, 100, 90, 130, 95, 200, 280];
 
 const hpNumEl=document.getElementById('hpNum');
 const hpBarEl=document.getElementById('hpBar');
@@ -435,6 +436,7 @@ const SK_TIPS=[
   '📲 -5 HP — ждать не нужно','🤔 -10 HP — комментарии обязательны',
   '💪 +5 HP — выручку вытянем!','🤩 +30 HP — ДОСТОЙНО! Команда горда',
   '✨ +40 HP — ОТЛИЧНО! Все молодцы',
+  '👥 -8 HP — самостоятельность требует усилий',
 ];
 
 function updateHUD(pts, delta, skIdx){
@@ -533,8 +535,9 @@ const BG_THEMES=[
   null,       // default
   'money',    // 8 = "Откуда расходы?" idx=8 (0-based sketch 8)
   null,null,null,
-  'stars',    // 13 = "Достойно"
-  'stars',    // 14 = "Отлично"
+  null,       // 13 = "Собрала"
+  'stars',    // 14 = "Достойно"
+  'stars',    // 15 = "Отлично"
 ];
 
 function startBG(type){
