@@ -165,6 +165,9 @@
 </style>
 </head>
 <body>
+<audio id="bgMusic" loop preload="auto">
+  <source src="music.mp3" type="audio/mpeg">
+</audio>
 
 <canvas id="bg-canvas"></canvas>
 <canvas id="fw-canvas"></canvas>
@@ -363,55 +366,192 @@ function playClick(){
   }catch(e){}
 }
 
-// Mario overworld
-const MARIO=[
-  659,659,0,659,0,523,659,0,784,0,0,0,392,0,0,0,
-  523,0,0,392,0,0,330,0,0,440,0,494,0,466,440,0,
-  392,659,784,880,0,698,784,0,659,0,523,587,494,0,0,
-  523,0,0,392,0,0,330,0,0,440,0,494,0,466,440,0,
-  784,740,698,0,622,0,659,0,415,440,523,0,440,523,587,
-  784,740,698,0,622,0,659,0,784,0,0,0,0,0,0,0,
-  784,740,698,0,622,0,659,0,415,440,523,0,440,523,587,
-  622,0,587,0,523,0,0,0,0,0,0,0,0,0,0,0,
+// ── MARIO OVERWORLD — NES AUTHENTIC ──
+// NES has 5 channels: Pulse1 (melody), Pulse2 (harmony), Triangle (bass), Noise (drums), DMC
+// We emulate all 4 main channels via Web Audio API
+
+// Full SMB overworld theme — note frequencies (0=rest)
+// Tempo: 150 BPM = 400ms per beat, 16th note = 100ms
+const NES_TEMPO = 160; // ms per 16th note (~95 BPM, comfortable)
+
+// Pulse wave emulation: mix of square + slight sawtooth = NES pulse
+function nesCreatePulse(ctx, freq, duty) {
+  // duty 0.5 = square, 0.25 = NES pulse1, 0.125 = NES pulse2
+  // Emulate via periodicWave
+  const real = new Float32Array(32);
+  const imag = new Float32Array(32);
+  for (let k = 1; k < 32; k++) {
+    imag[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * duty);
+  }
+  try {
+    const wave = ctx.createPeriodicWave(real, imag, {disableNormalization: false});
+    const osc = ctx.createOscillator();
+    osc.setPeriodicWave(wave);
+    osc.frequency.value = freq;
+    return osc;
+  } catch(e) {
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    return osc;
+  }
+}
+
+// SMB Overworld — full sequence
+// Format: [freq, duration_in_16ths]
+const SMB_CH1 = [ // Pulse1 — melody
+  [659,1],[659,1],[0,1],[659,1],[0,1],[523,1],[659,1],[0,1],
+  [784,2],[0,2],[392,2],[0,2],
+  [523,2],[0,1],[392,2],[0,1],[330,2],[0,2],
+  [440,1],[0,1],[494,1],[0,1],[466,1],[440,1],[0,1],
+  [392,1],[659,1],[784,1],[880,1],[0,1],[698,1],[784,1],[0,1],
+  [659,2],[523,1],[587,1],[494,2],[0,2],
+  [523,2],[0,1],[392,2],[0,1],[330,2],[0,2],
+  [440,1],[0,1],[494,1],[0,1],[466,1],[440,1],[0,1],
+  [392,1],[659,1],[784,1],[880,1],[0,1],[698,1],[784,1],[0,1],
+  [659,2],[523,1],[587,1],[494,2],[0,2],
+  // B section
+  [784,1],[740,1],[698,1],[0,1],[622,2],[0,1],
+  [659,1],[0,1],[415,1],[440,1],[523,2],[0,1],
+  [440,1],[523,1],[587,2],[0,2],
+  [784,1],[740,1],[698,1],[0,1],[622,2],[0,1],
+  [659,2],[0,4],
+  [784,1],[740,1],[698,1],[0,1],[622,2],[0,1],
+  [659,1],[0,1],[415,1],[440,1],[523,2],[0,1],
+  [440,1],[523,1],[587,2],[0,2],
+  [622,2],[587,2],[523,2],[0,2],
 ];
-let mIdx=0,mPlaying=false,mTimer=null;
-function startMario(){if(!soundOn||mPlaying)return;mPlaying=true;marioTick();}
-function stopMario(){mPlaying=false;if(mTimer)clearTimeout(mTimer);mTimer=null;}
 
-function playRichNote(freq,dur){
-  if(!soundOn||freq<=0)return;
-  try{
-    const ctx=getCtx(),t=ctx.currentTime;
-    const master=ctx.createGain();
-    master.gain.setValueAtTime(0.22,t);
-    master.gain.exponentialRampToValueAtTime(0.001,t+dur);
-    master.connect(ctx.destination);
-    // Melody square
-    const o1=ctx.createOscillator();o1.type='square';o1.frequency.value=freq;
-    const g1=ctx.createGain();g1.gain.value=0.5;
-    o1.connect(g1);g1.connect(master);o1.start(t);o1.stop(t+dur);
-    // Triangle octave up
-    const o2=ctx.createOscillator();o2.type='triangle';o2.frequency.value=freq*2;
-    const g2=ctx.createGain();g2.gain.value=0.2;
-    o2.connect(g2);g2.connect(master);o2.start(t);o2.stop(t+dur);
-    // Sine bass octave down
-    const o3=ctx.createOscillator();o3.type='sine';o3.frequency.value=freq*0.5;
-    const g3=ctx.createGain();g3.gain.value=0.25;
-    o3.connect(g3);g3.connect(master);o3.start(t);o3.stop(t+dur);
-    // Sawtooth shimmer 5th above
-    const o4=ctx.createOscillator();o4.type='sawtooth';o4.frequency.value=freq*1.5;
-    const g4=ctx.createGain();g4.gain.value=0.06;
-    o4.connect(g4);g4.connect(master);o4.start(t);o4.stop(t+dur);
-  }catch(e){}
+const SMB_CH2 = [ // Pulse2 — harmony (third below melody approx)
+  [523,1],[523,1],[0,1],[523,1],[0,1],[415,1],[523,1],[0,1],
+  [659,2],[0,2],[311,2],[0,2],
+  [415,2],[0,1],[311,2],[0,1],[261,2],[0,2],
+  [349,1],[0,1],[392,1],[0,1],[370,1],[349,1],[0,1],
+  [311,1],[523,1],[659,1],[698,1],[0,1],[554,1],[622,1],[0,1],
+  [523,2],[415,1],[466,1],[392,2],[0,2],
+  [415,2],[0,1],[311,2],[0,1],[261,2],[0,2],
+  [349,1],[0,1],[392,1],[0,1],[370,1],[349,1],[0,1],
+  [311,1],[523,1],[659,1],[698,1],[0,1],[554,1],[622,1],[0,1],
+  [523,2],[415,1],[466,1],[392,2],[0,2],
+  [622,1],[587,1],[554,1],[0,1],[494,2],[0,1],
+  [523,1],[0,1],[330,1],[349,1],[415,2],[0,1],
+  [349,1],[415,1],[466,2],[0,2],
+  [622,1],[587,1],[554,1],[0,1],[494,2],[0,1],
+  [523,2],[0,4],
+  [622,1],[587,1],[554,1],[0,1],[494,2],[0,1],
+  [523,1],[0,1],[330,1],[349,1],[415,2],[0,1],
+  [349,1],[415,1],[466,2],[0,2],
+  [494,2],[466,2],[415,2],[0,2],
+];
+
+const SMB_TRI = [ // Triangle — bass
+  [0,4],[0,4],[196,2],[0,2],
+  [131,2],[0,2],[98,2],[0,2],[82,2],[0,2],
+  [110,2],[0,2],[131,2],[0,2],
+  [98,2],[0,2],[165,2],[196,2],
+  [131,2],[0,2],[98,2],[0,2],[82,2],[0,2],
+  [110,2],[0,2],[131,2],[0,2],
+  [196,2],[0,2],[156,2],[0,2],
+  [165,2],[104,2],[196,2],[0,2],
+  [156,2],[0,2],[165,2],[0,2],[196,2],[0,2],
+  [156,2],[147,2],[131,2],[0,2],
+];
+
+// Noise channel — drum pattern (kick=low freq, snare=high freq burst)
+const SMB_DRUM = [
+  1,0,0,0, 0,0,1,0, 1,0,0,0, 0,1,0,0, // kick on 1,3 snare on 2,4
+];
+
+let mPlaying = false, mTimer = null, mIdx = 0;
+let mCh1Idx = 0, mCh2Idx = 0, mTriIdx = 0, mDrumIdx = 0;
+let mCh1Pos = 0, mCh2Pos = 0, mTriPos = 0;
+
+function startMario() {
+  if (!soundOn || mPlaying) return;
+  const aud = document.getElementById('bgMusic');
+  if (aud) { aud.volume = 0.45; aud.play().catch(()=>{}); }
+  mPlaying = true;
+}
+function stopMario() {
+  mPlaying = false;
+  if (mTimer) clearTimeout(mTimer); mTimer = null;
+  const aud = document.getElementById('bgMusic');
+  if (aud) { aud.pause(); aud.currentTime = 0; }
 }
 
-function marioTick(){
-  if(!mPlaying||!soundOn)return;
-  const f=MARIO[mIdx%MARIO.length];
-  if(f>0)playRichNote(f,0.11);
-  mIdx++;mTimer=setTimeout(marioTick,135);
+function resetMarioSeq() {
+  mCh1Idx = 0; mCh2Idx = 0; mTriIdx = 0; mDrumIdx = 0;
+  mCh1Pos = 0; mCh2Pos = 0; mTriPos = 0;
 }
 
+function playNESNote(ctx, freq, dur, duty, vol, t) {
+  if (freq <= 0 || vol <= 0) return;
+  try {
+    const osc = nesCreatePulse(ctx, freq, duty);
+    // Lowpass filter — cuts harsh high frequencies
+    const lpf = ctx.createBiquadFilter();
+    lpf.type = 'lowpass';
+    lpf.frequency.value = 2200;
+    lpf.Q.value = 0.5;
+    // Soft envelope
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(vol, t + 0.008);
+    env.gain.setValueAtTime(vol * 0.8, t + dur * 0.4);
+    env.gain.linearRampToValueAtTime(0.001, t + dur);
+    osc.connect(lpf);
+    lpf.connect(env);
+    env.connect(ctx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  } catch(e) {}
+}
+
+function playNESTri(ctx, freq, dur, vol, t) {
+  if (freq <= 0) return;
+  try {
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    const lpf = ctx.createBiquadFilter();
+    lpf.type = 'lowpass';
+    lpf.frequency.value = 600;
+    lpf.Q.value = 0.7;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol * 0.85, t);
+    g.gain.setValueAtTime(vol * 0.85, t + dur - 0.015);
+    g.gain.linearRampToValueAtTime(0.001, t + dur + 0.01);
+    osc.connect(lpf);
+    lpf.connect(g);
+    g.connect(ctx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  } catch(e) {}
+}
+
+function playNESDrum(ctx, type, t) {
+  // type 0=kick, 1=snare
+  try {
+    const bufLen = ctx.sampleRate * (type === 0 ? 0.08 : 0.05);
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) {
+      const env = 1 - i / bufLen;
+      data[i] = (Math.random() * 2 - 1) * env * (type === 0 ? 0.4 : 0.25);
+    }
+    if (type === 0) { // kick: pitched noise burst
+      for (let i = 0; i < bufLen; i++) data[i] *= Math.sin(i / bufLen * Math.PI * 8);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = type === 0 ? 0.12 : 0.07;
+    src.connect(g); g.connect(ctx.destination);
+    src.start(t); src.stop(t + 0.1);
+  } catch(e) {}
+}
+
+function marioTick() {
+  // Audio handled by <audio> element
+}
 function playActivate(){[120,240,480,960,1440].forEach((f,i)=>playTone(f,i<2?'sawtooth':'sine',0.1,0.06,i*0.08));}
 function playIncoming(){playTone(880,'sine',0.15,0.09);playTone(1100,'sine',0.12,0.06,0.18);}
 function playTranslate(){playTone(660,'triangle',0.2,0.07);playTone(880,'triangle',0.2,0.06,0.12);playTone(1320,'triangle',0.25,0.05,0.25);}
@@ -677,8 +817,14 @@ function toggleSound(){
   const btn=document.getElementById('soundBtn');
   btn.textContent=soundOn?'🔊 звук вкл':'🔇 звук выкл';
   btn.classList.toggle('on',soundOn);
-  if(soundOn){getCtx();startMario();}
-  else stopMario();
+  const aud=document.getElementById('bgMusic');
+  if(soundOn){
+    if(aud){ aud.volume=0.45; aud.play().catch(()=>{}); }
+    mPlaying=true;
+  } else {
+    if(aud){ aud.pause(); }
+    mPlaying=false;
+  }
 }
 
 // ════════════════════════════════════════════════
